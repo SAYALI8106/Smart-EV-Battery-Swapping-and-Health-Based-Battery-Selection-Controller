@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart EV Battery Swapping and Health-Based Battery Selection Controller</title>
+<style>
+:root{--n:#0b2a5b;--bg:#eef2f8}*{box-sizing:border-box}
+body{margin:0;font:15px/1.55 "Segoe UI",Arial,sans-serif;background:var(--bg);color:#1b2433}
+header{background:var(--n);color:#fff;padding:18px 26px}h1{margin:0;font-size:24px}header p{margin:4px 0 0;opacity:.8}
+main{max-width:1440px;margin:auto;padding:16px}
+.card{background:#fff;border-radius:10px;padding:16px;margin:0 0 16px;box-shadow:0 1px 4px #0b2a5b26}
+h2{margin:0 0 10px;color:var(--n);font-size:18px;border-bottom:2px solid #dbe4f3;padding-bottom:6px}h3{color:var(--n);margin:12px 0 4px;font-size:15px}
+button{background:var(--n);color:#fff;border:0;border-radius:7px;padding:8px 14px;font-weight:600;cursor:pointer;margin:2px;font-size:14px}
+button:hover{background:#1a4590}button.alt{background:#566884}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}.tabs button{background:#dbe4f3;color:var(--n);margin:0}.tabs button.on{background:var(--n);color:#fff}
+.tab{display:none}.tab.on{display:block}
+.g{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.g .card{margin:0}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #cfd8e8;padding:4px 8px;text-align:center}th{background:#e3ebf8;color:var(--n)}td.l{text-align:left}
+.svgw{overflow-x:auto}svg{width:100%;height:auto;display:block}
+.w{fill:none;stroke-width:2.6;stroke-linejoin:round;transition:opacity .2s}
+.ic{fill:#f6f9ff;stroke:#0b2a5b;stroke-width:2}.it{font:700 13px "Segoe UI",sans-serif;fill:#0b2a5b}.is{font:10.5px "Segoe UI",sans-serif;fill:#44546a}
+.pl{font:10.5px "Segoe UI",sans-serif;fill:#223}.pw{stroke:#666;stroke-width:2;fill:none}.vc{font:bold 10px sans-serif;fill:#c62828}.gd{font:bold 10px sans-serif;fill:#555}
+.lb{font:bold 13px "Segoe UI",sans-serif}.vt{font:bold 12px "Segoe UI",sans-serif;fill:#223}.sm{font:9.5px "Segoe UI",sans-serif;fill:#44546a}
+.sw2{cursor:pointer}.sw2:hover rect{stroke:#000;stroke-width:2}
+.en{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.eb{border:2px solid #cfd8e8;border-radius:10px;padding:8px;text-align:center;background:#f4f6fa}.eb.on{background:#e3f7e8;border-color:#2e9d4a}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px}.kv b{color:var(--n)}
+.bad{color:#c62828;font-weight:700}.ok{color:#1b7a36;font-weight:700}
+.note{background:#fff7e0;border-left:5px solid #f5a623;padding:10px 14px;border-radius:6px;margin:8px 0}
+.big{font:700 26px Consolas,monospace;color:var(--n)}.eq{font-family:Consolas,monospace;background:#f1f5fb;padding:3px 8px;border-radius:4px;display:block;margin:4px 0}
+.o{text-decoration:overline}.km td{width:90px;height:34px}.hit{background:#bfe8c8!important;font-weight:700}
+details{border:1px solid #cfd8e8;border-radius:8px;padding:6px 12px;margin:6px 0}summary{cursor:pointer;font-weight:600;color:var(--n)}
+</style></head><body>
+<header><h1>Smart EV Battery Swapping and Health-Based Battery Selection Controller</h1>
+<p>Digital Electronics T1 · 7408 ×2 · 74LS153 · 74LS74 · 74LS90 · 74LS155 · 74LS139 · 1 Hz clock</p></header>
+<main><div class="tabs" id="nav"></div>
+
+<div class="tab on" id="p0"><section class="card"><h2>Circuit Diagram &amp; Simulator (click any A/H switch)</h2>
+<div style="margin-bottom:8px"><button onclick="go()">START CLOCK</button><button class="alt" onclick="halt()">STOP CLOCK</button><button onclick="step()">STEP CLOCK</button><button class="alt" onclick="edge()">STEP EDGE</button><button class="alt" onclick="reset()">RESET</button><button style="background:#546e7a" onclick="pulse()">SWAP_DONE (press &amp; release)</button><button style="background:#546e7a" onclick="setSW(sw^1)">HOLD / RELEASE SWAP_DONE</button><b id="swl" style="margin-left:8px"></b></div><p class="sm" style="font-size:13px;margin:0 0 6px">SWAP_DONE: press when the battery swap operation has been completed. It never changes A or H.</p>
+<div class="svgw"><svg id="sv" viewBox="0 -14 1420 700" style="min-width:1100px" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI,Arial"></svg></div>
+<p class="sm" style="font-size:13px">● junction · small arc = wires cross with <b>no</b> connection · faded = logic 0 · EN/SEL wires glow when LOW (active LOW). Colours: red B1/V1, green B2/V2, orange B3/V3, blue B4/V4, orange-brown S0=Q0, magenta S1=Q1, purple Y/VALID, grey clock / SWAP_DONE / CNT_CLK, black EN. The clock wire hops over VALID and Q̅ hops over VALID: crossings, not connections.</p></section>
+<div class="g" style="margin-bottom:16px"><section class="card"><h2>Live status</h2><div class="big" id="cq"></div><p id="ph" style="font-weight:600"></p>
+<div class="kv"><b>Selected battery</b><span id="selB"></span><b>MUX input</b><span id="mx"></span><b>V1 V2 V3 V4</b><span id="vv"></span><b>Y = D (MUX out)</b><span id="yy"></span><b>Q = VALID</b><span id="qq"></span><b>Q̅ → 1G̅</b><span id="qb"></span><b>SWAP_DONE</b><span id="ss"></span><b>CNT_CLK = Q·SWAP_DONE</b><span id="cc"></span><b>Enabled battery</b><span id="enb"></span></div><div id="msg"></div></section>
+<section class="card"><h2>74LS155 outputs (active LOW)</h2><div class="en" id="en"></div><p class="sm" style="font-size:13px">ENn = LOW → battery n enabled. 74LS139 SEL1–SEL4 (indicator, active LOW) follow S1S0 only.</p></section></div></div>
+
+<div class="tab" id="p1"><div class="g"><section class="card"><h2>Problem Statement &amp; Motivation</h2><p>An EV battery swapping station holds several batteries, but some may be unavailable or unhealthy. The controller turns “available” and “healthy” into one valid bit per battery, checks the batteries one after another, and only generates an enable pulse for a battery that is valid.</p><p><b>Motivation:</b> handing a customer a battery that is not ready or not healthy wastes time and is unsafe.</p><h3>Novelty</h3><p>Combines validity checking, round-robin digital selection, latching and active-LOW enable generation in a small educational logic design. It is a model, not a production EV technology.</p></section>
+<section class="card"><h2>Problem Understanding &amp; Requirements</h2><ul><li>Four EV batteries are available.</li><li>Each battery has an Availability (A) and a Health (H) signal.</li><li>A battery is valid only when A = 1 and H = 1.</li><li>The controller checks batteries in round-robin order.</li><li>A MOD-4 counter gives four selection states.</li><li>The MUX checks the battery of the current counter state.</li><li>A D flip-flop stores the selected validity result.</li><li>A demultiplexer generates the battery-enable output.</li><li>The counter advances to the next battery only after the selected battery is valid and SWAP_DONE is pressed.</li><li>A decoder indicates which battery position is selected.</li><li>The design uses combinational logic, sequential logic and a clock.</li></ul>
+<div class="note"><b>Implemented behaviour: hold, not skip.</b> The 74LS90 advances only when CNT_CLK = VALID · SWAP_DONE falls. If the battery being checked is invalid, CNT_CLK stays 0 and the counter <b>waits</b> on that battery; nothing skips it. Automatic skipping is a <b>Future Enhancement</b>.</div></section></div></div>
+
+<div class="tab" id="p2"><section class="card"><h2>Conceptual / Functional Block Diagram</h2><div class="svgw"><svg id="cd" viewBox="0 0 1000 340" style="min-width:860px"></svg></div>
+<p>Top row: data path. Bottom row: SWAP_DONE and the latched VALID go into a 7408 AND gate whose output CNT_CLK clocks the 74LS90. The counter's S1,S0 feed back to the MUX (which battery has priority) and forward to the 74LS155 and 74LS139. The 1 Hz clock only latches the flip-flop (rising edge) and gates the 74LS155 (1C). Arcs are crossings, not connections.</p></section></div>
+
+<div class="tab" id="p3"><div class="g"><section class="card"><h2>Component classification</h2><div id="comp"></div></section><section class="card"><h2>Connection audit</h2><div id="chk"></div></section></div></div>
+
+<div class="tab" id="p4"><div class="g"><section class="card"><h2>Boolean Equations</h2>
+<span class="eq">V1 = A1 · H1</span><span class="eq">V2 = A2 · H2</span><span class="eq">V3 = A3 · H3</span><span class="eq">V4 = A4 · H4</span>
+<span class="eq">Y = <span class="o">S1</span><span class="o">S0</span>V1 + <span class="o">S1</span>S0V2 + S1<span class="o">S0</span>V3 + S1S0V4</span><span class="eq">D = Y</span><span class="eq">Q(next) = D (on CLK↑)</span>
+<p>Q is the latched validity of the battery that the counter was pointing at when the clock rose.</p><span class="eq">CNT_CLK = Q · SWAP_DONE &nbsp;(7408 #2)</span><p>The 74LS90 counts on the falling edge of CNT_CLK, i.e. when SWAP_DONE is released while VALID = 1.</p></section>
+<section class="card"><h2>Enable path (as implemented)</h2><span class="eq">1G̅ = Q̅ &nbsp; 1C = CLK</span><span class="eq">ENn = NOT( CLK · Q · [S1S0 = n−1] )</span>
+<p>74LS155 section 1 has an active-LOW enable 1G̅ and an active-HIGH data input 1C. Q̅ drives 1G̅ (enabled when Q = 1, i.e. valid) and the clock drives 1C, so the selected output goes LOW only while the clock is high. <b>Hazard:</b> if SWAP_DONE is released while CLK is high, the counter moves while the old Q = 1 is still stored, so the new battery's EN can go LOW until CLK falls. Release SWAP_DONE while CLK is low. A real build would clear the 74LS74 with a spare gate; not added here.</p></section></div></div>
+
+<div class="tab" id="p5"><div class="g"><section class="card"><h2>A. 7408</h2><div id="t1"></div></section><section class="card"><h2>B. 74LS153</h2><div id="t2"></div></section><section class="card"><h2>C. 74LS90 (MOD-4, counts on CNT_CLK↓)</h2><div id="t3"></div></section><section class="card"><h2>D. 74LS74</h2><div id="t4"></div></section><section class="card"><h2>E. 74LS155 (ACTIVE LOW)</h2><div id="t5"></div></section><section class="card"><h2>F. 74LS139 (ACTIVE LOW)</h2><div id="t6"></div></section><section class="card"><h2>G. 7408 #2 (counter advance)</h2><div id="t7"></div></section></div></div>
+
+<div class="tab" id="p6"><div class="g"><section class="card"><h2>K-map 1: V = A·H</h2><table class="km" style="width:auto"><tr><th>A \ H</th><th>0</th><th>1</th></tr><tr><th>0</th><td>0</td><td>0</td></tr><tr><th>1</th><td>0</td><td class="hit">1</td></tr></table><p>The K-map is used to simplify the Boolean logic for battery validity. One cell is 1, so V = A·H (one AND gate).</p></section>
+<section class="card"><h2>K-map 2: MUX output Y</h2><table class="km" style="width:auto"><tr><th>S1 \ S0</th><th>0</th><th>1</th></tr><tr><th>0</th><td>V1</td><td>V2</td></tr><tr><th>1</th><td>V3</td><td>V4</td></tr></table><p>Cells hold variables, so no grouping is possible: Y keeps its four-term form. With the <b>current switches</b>:</p><div id="km2"></div></section><section class="card"><h2>K-map 3: CNT_CLK = Q·SWAP_DONE</h2><table class="km" style="width:auto"><tr><th>Q \ SWAP_DONE</th><th>0</th><th>1</th></tr><tr><th>0</th><td>0</td><td>0</td></tr><tr><th>1</th><td>0</td><td class="hit">1</td></tr></table><p>Only one 1-cell: CNT_CLK = Q·SWAP_DONE, a single AND gate. This is the only control equation added; the counter advances only when VALID and SWAP_DONE are both 1.</p></section></div></div>
+
+<div class="tab" id="p7"><div class="g"><section class="card"><h2>State Table (hold until swap done)</h2><div id="stt" class="svgw"></div><p><b>Implemented behaviour: wait/hold, not skip.</b> Next state = next battery only when VALID · SWAP_DONE; otherwise the state stays. The sequence B1 → B2 → B3 → B4 → B1 therefore happens only on completed swaps. A, H and the clock do not change the state directly.</p></section>
+<section class="card"><h2>State Diagram</h2><div class="svgw"><svg id="sd" viewBox="0 -30 620 410" style="min-width:520px;max-width:700px"></svg></div><p>Green = current state in the simulator. Forward arrows: CNT_CLK falls with VALID · SWAP_DONE. Loops: NOT(VALID · SWAP_DONE) → hold. No skip transitions exist.</p></section></div></div>
+
+<div class="tab" id="p8"><section class="card"><h2>Timing Diagram (5 clock cycles from RESET, current switches)</h2><label><input type="checkbox" id="auto" checked onchange="renderTiming(V())"> SWAP_DONE pressed in every clock cycle (untick = never pressed: the counter holds)</label><div class="svgw"><svg id="tm" viewBox="0 0 800 410" style="min-width:760px"></svg></div><p>Each clock cycle is four slots. CLK↑ latches Q = VALID of the selected battery. SWAP_DONE is pressed in the second slot; if Q = 1, CNT_CLK = 1, and when SWAP_DONE is released CNT_CLK falls and the 74LS90 advances (Q0/Q1, S1/S0 and Y change). Q keeps the old value until the next CLK↑. If the battery is invalid (Q = 0), CNT_CLK stays 0 and the counter holds even if SWAP_DONE is pressed. EN rows are LOW (shaded) only while CLK is high and Q = 1 for the selected battery. Q0 = S0 and Q1 = S1 are the same wires.</p></section></div>
+
+<div class="tab" id="p9"><section class="card"><h2>Working</h2><ol><li>Availability and health signals are provided for each battery.</li><li>7408 #1 AND gates generate V1–V4.</li><li>The 74LS90 state (S1S0) names the priority battery: 00 = B1 … 11 = B4.</li><li>S1,S0 select one of V1–V4 through the 74LS153.</li><li>The MUX output Y is applied to the D input of the 74LS74.</li><li>On CLK↑ the flip-flop stores the selected validity: Q = VALID.</li><li>The 74LS155 (1G̅ = Q̅, 1C = CLK) drives the matching active-LOW EN output only for a valid battery, while the clock is high. The 74LS139 indicates the selected position.</li><li>When the swap is completed the user presses SWAP_DONE; 7408 #2 forms CNT_CLK = VALID · SWAP_DONE.</li><li>When SWAP_DONE is released, CNT_CLK falls and the 74LS90 advances: the next battery becomes the priority battery.</li><li>If VALID = 0, CNT_CLK stays 0 and the counter waits on that battery (no skipping).</li></ol>
+<p><b>74LS90 as MOD-4:</b> CNT_CLK → CKA, QA → CKB, R0(1) = R0(2) = QC, R9(1) = R9(2) = GND. Q0 = QA, Q1 = QB. When QC would become 1 the counter is reset, so only states 00–11 occur. <b>Other tie-offs:</b> 74LS153 1G̅ = GND, 74LS74 PRE̅ = CLR̅ = +5V, 74LS139 1G̅ = GND.</p></section></div>
+
+<div class="tab" id="p10"><section class="card"><h2>Simulation Examples</h2>
+<button onclick="sc([1,1,1,1],[1,1,1,1],1)">Scenario 1: all valid</button><button onclick="sc([1,1,1,1],[1,0,1,1],2)">Scenario 2: B2 invalid</button><button onclick="sc([0,0,0,0],[0,0,0,0],3)">Scenario 3: all invalid</button><button class="alt" onclick="showTab(0)">OPEN SIMULATOR</button>
+<p id="scd"></p><h3>Result for the current switch settings</h3><div id="ex"></div></section></div>
+
+<div class="tab" id="p11"><div class="g"><section class="card"><h2>Advantages</h2><ul><li>Health- and availability-aware enable</li><li>Round-robin priority that advances only after a completed swap</li><li>Simple digital logic, easy to simulate</li><li>Shows combinational + sequential logic and a clock</li><li>Extendable to more batteries</li></ul><h2 style="margin-top:14px">Applications</h2><ul><li>EV battery swapping stations</li><li>E-scooter / e-rickshaw battery swap kiosks</li><li>Battery banks and charging racks (educational model)</li></ul></section>
+<section class="card"><h2>Limitations</h2><ul><li>Binary A/H inputs only; no real SOC/SOH measurement.</li><li>The counter waits on an invalid battery (CNT_CLK = 0): there is no skipping, so one bad battery blocks the sequence until fixed or RESET.</li><li>Stale-Q hazard: releasing SWAP_DONE while CLK is high can briefly enable the next battery.</li><li>Small gate-delay glitches at clock edges are not modelled.</li><li>Real systems need a BMS, sensors, isolation and power electronics. This is a logic prototype.</li></ul></section>
+<section class="card"><h2>Future Scope</h2><ul><li><b>Future Enhancement:</b> automatic skipping of invalid batteries (priority encoder or search logic).</li><li>Real SOC/SOH inputs via ADC and comparators.</li><li>8 batteries: 3-bit counter, 74LS151, 3-to-8 decoder.</li></ul><h2 style="margin-top:14px">Conclusion</h2><p>The controller validates each battery with AND gates, checks the priority battery, latches the result, issues an active-LOW enable only for a valid battery, and moves to the next battery only after SWAP_DONE. Its limits are stated openly.</p></section></div></div>
+
+<div class="tab" id="p12"><section class="card"><h2>T1 Evaluation Rubric – Total 25 Marks</h2><table>
+<tr><th>Criterion</th><th>Marks</th></tr><tr style="background:#f4f8ff"><td class="l"><b>Problem Identification and Circuit Design</b></td><td><b>15</b></td></tr>
+<tr><td class="l">Novelty / Innovation</td><td>2</td></tr><tr><td class="l">Problem understanding and requirements</td><td>3</td></tr><tr><td class="l">Circuit design</td><td>3</td></tr><tr><td class="l">Components used (Sequential / Combinational / Clock)</td><td>2</td></tr><tr><td class="l">Solving (Truth Table, K-map, Equations)</td><td>5</td></tr>
+<tr style="background:#f4f8ff"><td class="l"><b>Presentation and Question Answer</b></td><td><b>10</b></td></tr>
+<tr><td class="l">Clarity of explanation</td><td>3</td></tr><tr><td class="l">Team work</td><td>2</td></tr><tr><td class="l">Delivery and Communication</td><td>2</td></tr><tr><td class="l">Question and Answers</td><td>3</td></tr>
+<tr style="background:var(--n);color:#fff"><td class="l"><b>Total</b></td><td><b>25</b></td></tr></table></section></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const T=(h,r)=>'<table><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+r.map(a=>'<tr>'+a.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</table>';
+const LOW='<b class="ok">LOW</b>';
+let svg='';const bc=['#e53935','#2e9d4a','#d99a00','#1e6fe0'];
+const C={S1:'#d81b60',S0:'#f57c00',CLK:'#555',Y:'#7b1fa2',Q:'#7b1fa2',QB:'#7b1fa2',SW:'#546e7a',CC:'#37474f'};
+function path(p){let d='M'+p[0][0]+' '+p[0][1];for(let i=1;i<p.length;i++){const[x,y,h]=p[i];if(h){const r=p[i-1][0]<x;d+=`L${x+(r?-6:6)} ${y}A6 6 0 0 ${r?1:0} ${x+(r?6:-6)} ${y}`}else d+=`L${x} ${y}`}return d}
+function W(n,c,p,noArrow){svg+=`<path class="w n_${n}" stroke="${c}" d="${path(p)}"/>`;if(noArrow)return;const a=p[p.length-2],b=p[p.length-1],dx=Math.sign(b[0]-a[0]),dy=Math.sign(b[1]-a[1]),x=b[0],y=b[1];
+svg+=`<polygon class="n_${n}" fill="${c}" points="${x},${y} ${x-dx*9+dy*4.5},${y-dy*9+dx*4.5} ${x-dx*9-dy*4.5},${y-dy*9-dx*4.5}"/>`}
+const dot=(x,y,c,n)=>svg+=`<circle class="n_${n}" cx="${x}" cy="${y}" r="4.5" fill="${c}"/>`;
+const tx=(x,y,s,c='pl',a='start',id='')=>svg+=`<text x="${x}" y="${y}" class="${c}" text-anchor="${a}" ${id?'id="'+id+'"':''}>${s}</text>`;
+function ic(x,y,w,h,t,s,vx,gx){svg+=`<rect class="ic" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/>`;tx(x+w/2,y+15,t,'it','middle');tx(x+w/2,y+28,s,'is','middle');
+svg+=`<path class="pw" d="M${x+vx} ${y}v-12M${x+gx} ${y+h}v12"/>`;tx(x+vx,y-16,'+5V (VCC)','vc','middle');tx(x+gx,y+h+24,'GND','gd','middle')}
+const andg=(x,y)=>svg+=`<path d="M${x} ${y}h20a30 30 0 0 1 0 60h-20z" fill="#fff" stroke="#223" stroke-width="2"/>`;
+const gl=(x1,y,x2,t,x3)=>{svg+=`<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#555" stroke-width="2"/>`;tx(x3,y+4,t,'gd','end')};
+
+ic(150,44,110,352,'7408 (74LS08)','4 × AND: Vn = An·Hn',90,20);
+for(let k=0;k<4;k++){const y0=80+k*88,c=bc[k],n=k+1;
+ [['A',y0],['H',y0+30]].forEach(([t,y])=>{const id=t+n;
+  svg+=`<text x="6" y="${y+5}" class="lb" fill="${c}">${id}</text><g class="sw2" onclick="tg('${t}',${k})"><title>Toggle ${id}</title><rect id="r_${id}" x="32" y="${y-10}" width="38" height="20" rx="10" stroke="#333"/><circle id="k_${id}" cy="${y}" r="7" fill="#fff"/></g>`;
+  W(id,c,[[74,y],[178,y]]);tx(80,y-5,'','sm','start','st_'+id)});
+ andg(178,y0-10);
+ W('V'+n,c,[[223,y0+20],[430,y0+20]]);tx(300,y0+12,'V'+n+'=0','vt','start','vt'+n);tx(436,y0+24,'I'+k+' (V'+n+')')}
+ic(430,50,110,350,'74LS153','4:1 MUX',80,20);tx(485,66,'1G̅ = GND','sm','middle');
+tx(532,234,'1Y','pl','end');tx(470,392,'S1','pl','middle');tx(500,392,'S0','pl','middle');
+W('Y',C.Y,[[540,230],[640,230]]);tx(580,222,'Y=0 (MUX OUT)','vt','middle','yt');
+ic(640,190,100,120,'74LS74','D flip-flop',80,20);
+tx(648,234,'D');tx(648,274,'CLK ↑');tx(732,214,'Q','pl','end');tx(732,262,'Q̅','pl','end');tx(690,300,'PRE̅=CLR̅=+5V','sm','middle');
+W('Q',C.Q,[[740,210],[756,210]],1);W('Q',C.Q,[[756,210],[773,210]]);dot(756,210,C.Q,'Q');W('Q',C.Q,[[756,210],[756,470],[800,470]]);tx(762,425,'VALID','sm','start');svg+=`<circle id="vled" cx="782" cy="210" r="9" fill="#ddd" stroke="#333"/>`;tx(782,188,'VALID = Q','sm','middle');tx(806,214,'Q=0','vt','start','qt');
+W('QB',C.QB,[[740,262],[756,262,1],[800,262],[800,100],[1130,100]]);tx(806,256,'Q̅=1','vt','start','qbt');
+svg+=`<rect class="ic" x="560" y="310" width="70" height="40" rx="8"/>`;tx(595,327,'1 Hz','it','middle');tx(595,342,'CLOCK','is','middle');tx(595,366,'CLK=0','vt','middle','ct');
+W('CLK',C.CLK,[[630,330],[635,330],[635,270],[640,270]]);
+W('CLK',C.CLK,[[635,330],[756,330,1],[900,330],[900,140],[1130,140]]);dot(635,330,C.CLK,'CLK');
+ic(780,435,110,100,'7408 #2','AND gate',90,20);andg(800,455);tx(895,478,'CNT_CLK','sm','start');
+svg+=`<g class="sw2" onclick="setSW(sw^1)"><title>Click: hold/release SWAP_DONE</title><rect id="swb" x="650" y="486" width="95" height="28" rx="6" fill="#546e7a" stroke="#223"/><text x="697" y="505" class="lb" fill="#fff" style="font-size:11px" text-anchor="middle">SWAP_DONE</text></g>`;tx(697,530,'SWAP_DONE = 0','vt','middle','swt');
+W('SW',C.SW,[[745,500],[800,500]]);W('CC',C.CC,[[850,485],[950,485]]);
+ic(950,455,120,130,'74LS90','MOD-4 counter',100,20);tx(958,489,'CKA ↓ (CNT_CLK)');tx(990,578,'Q0 (QA)','pl','middle');tx(1030,578,'Q1 (QB)','pl','middle');
+tx(1010,512,'QA→CKB','sm','middle');tx(1010,526,'R0(1,2)=QC · R9(1,2)=GND','sm','middle');
+W('S0',C.S0,[[990,585],[990,640],[500,640],[500,400]]);dot(990,640,C.S0,'S0');
+W('S1',C.S1,[[1030,585],[1030,670],[470,670],[470,400]]);dot(1030,670,C.S1,'S1');
+W('S0',C.S0,[[990,640],[1030,640,1],[1080,640],[1080,250],[1130,250]]);
+W('S1',C.S1,[[1030,670],[1100,670],[1100,280],[1130,280]]);
+W('S0',C.S0,[[1080,450],[1100,450,1],[1130,450]]);dot(1080,450,C.S0,'S0');
+W('S1',C.S1,[[1100,490],[1130,490]]);dot(1100,490,C.S1,'S1');
+tx(520,632,'S0 = Q0','vt','start','s0t');tx(520,662,'S1 = Q1','vt','start','s1t');
+ic(1130,60,110,260,'74LS155','1:4 DEMUX (outputs ACTIVE LOW)',80,20);
+tx(1138,104,'1G̅ ← Q̅');tx(1138,144,'1C ← CLK');tx(1138,254,'S0');tx(1138,284,'S1');
+ic(1130,400,110,200,'74LS139','2:4 decoder (indicator)',80,20);tx(1138,454,'S0');tx(1138,494,'S1');tx(1138,564,'1G̅ = GND');gl(1112,560,1130,'GND',1108);
+for(let i=0;i<4;i++){const y=150+i*40,y2=440+i*36;
+ tx(1232,y+4,'1Y'+(i+1),'pl','end');W('E'+i,'#000',[[1240,y],[1300,y]]);svg+=`<circle id="led${i}" cx="1314" cy="${y}" r="9" fill="#ddd" stroke="#333"/>`;tx(1330,y-1,'EN'+(i+1),'lb');tx(1330,y+13,'HIGH','sm','start','enT'+i);
+ tx(1232,y2+4,'1Y'+i,'pl','end');W('D'+i,'#78909c',[[1240,y2],[1300,y2]]);svg+=`<circle id="dl${i}" cx="1314" cy="${y2}" r="9" fill="#ddd" stroke="#333"/>`;tx(1330,y2-1,'SEL'+(i+1),'lb');tx(1330,y2+13,'HIGH','sm','start','dT'+i)}
+tx(1300,52,'EN1–EN4: ACTIVE LOW (LOW = enabled)','is','end');tx(1300,392,'Selected-battery indicator (active LOW)','is','end');
+$('sv').innerHTML=svg;
+for(let i=0;i<4;i++)$('en').innerHTML+=`<div class="eb" id="eb${i}"><b>EN${i+1}</b><div>Battery ${i+1}</div><div id="es${i}">HIGH · disabled</div></div>`;
+
+/* simulation: advance only on CNT_CLK = Q.SWAP_DONE falling */
+let A=[1,1,1,1],H=[1,1,1,1],cnt=0,clk=0,Q=0,sw=0,pcc=0,seen=0,stale=0,tm=null,ph='',note='';
+const V=()=>A.map((a,i)=>a&H[i]);
+const yn=(b,a,c)=>`<span class="${b?'ok':'bad'}">${b?a:c}</span>`;
+function settle(){const cc=Q&sw;if(pcc&&!cc){const o=cnt;cnt=(cnt+1)&3;seen=0;stale=Q;ph='CNT_CLK fell: 74LS90 advanced.';note='SWAP_DONE released with VALID = 1: B'+(o+1)+' → B'+(cnt+1)+'. B'+(cnt+1)+' is now the priority battery.'}pcc=cc}
+function tg(t,k){(t=='A'?A:H)[k]^=1;draw()}
+function setSW(x){sw=x;if(x)note=Q?'SWAP_DONE = 1 and VALID = 1: CNT_CLK = 1. The counter advances when SWAP_DONE is released.':'SWAP_DONE = 1 but VALID = 0: CNT_CLK stays 0, counter holds (no skip).';settle();draw()}
+function pulse(){setSW(1);setSW(0)}
+function edge(){clk^=1;
+ if(clk){Q=V()[cnt];seen=1;stale=0;ph='CLK↑: 74LS74 latched Y = V'+(cnt+1)+' → Q = '+Q+'.';note=Q?'B'+(cnt+1)+' is valid: EN'+(cnt+1)+' LOW while CLK is high. Press SWAP_DONE after the swap.':'B'+(cnt+1)+' is not valid: Q = 0, no EN, counter will hold here.';settle()}
+ else{ph='CLK↓: 1C falls, all EN HIGH. The clock does not drive the counter.';note=''}
+ draw()}
+function step(){if(clk)edge();edge();edge()}
+function go(){if(!tm)tm=setInterval(edge,500)}
+function halt(){clearInterval(tm);tm=null}
+function reset(){halt();cnt=0;clk=0;Q=0;sw=0;pcc=0;seen=0;stale=0;ph='RESET: counter 00 (B1), Q = 0, SWAP_DONE = 0, all EN HIGH.';note='';draw()}
+function sc(a,h,n){A=a.slice();H=h.slice();reset();$('scd').innerHTML=['','<b>Scenario 1:</b> all valid. Start the clock: B1 is latched and EN1 pulses LOW each clock. The counter stays on B1 until you press SWAP_DONE; then B2 becomes the priority battery, and so on B3, B4, B1.','<b>Scenario 2:</b> B2 invalid. After B1\'s swap the counter moves to B2; V2 = 0, Q = 0, no EN2, and SWAP_DONE has no effect (CNT_CLK = 0). The counter <u>holds</u> on B2; it does not skip. Make H2 = 1 (then CLK↑) to continue.','<b>Scenario 3:</b> all invalid. V1 = V2 = V3 = V4 = 0, MUX OUT = 0, VALID = 0, every EN stays HIGH, SWAP_DONE does nothing: no valid battery is indicated.'][n];draw();showTab(10)}
+function draw(){const v=V(),s0=cnt&1,s1=cnt>>1,y=v[cnt],cc=Q&sw,N={S0:s0,S1:s1,Y:y,Q:Q,QB:Q?0:1,CLK:clk,SW:sw,CC:cc};
+ const act=i=>clk&&Q&&i==cnt;
+ for(let i=0;i<4;i++){N['A'+(i+1)]=A[i];N['H'+(i+1)]=H[i];N['V'+(i+1)]=v[i];N['E'+i]=act(i)?1:0;N['D'+i]=i==cnt?1:0}
+ for(const n in N)document.querySelectorAll('.n_'+n).forEach(e=>e.style.opacity=N[n]?1:.25);
+ for(let i=0;i<4;i++){const n=i+1;
+  [['A',A],['H',H]].forEach(([t,a])=>{const id=t+n,on=a[i];$('r_'+id).setAttribute('fill',on?'#2e9d4a':'#9aa5b5');$('k_'+id).setAttribute('cx',on?61:45);$('st_'+id).textContent=id+'='+on});
+  $('vt'+n).textContent='V'+n+'='+v[i];
+  $('led'+i).setAttribute('fill',act(i)?'#2e9d4a':'#ddd');$('enT'+i).textContent=act(i)?'LOW · ENABLED':'HIGH';
+  $('dl'+i).setAttribute('fill',i==cnt?'#1e6fe0':'#ddd');$('dT'+i).textContent=i==cnt?'LOW · selected':'HIGH';
+  $('eb'+i).className='eb'+(act(i)?' on':'');$('es'+i).textContent=act(i)?'LOW · ENABLED':'HIGH · disabled'}
+ $('vled').setAttribute('fill',Q?'#7b1fa2':'#ddd');$('swb').setAttribute('fill',sw?'#c2185b':'#546e7a');
+ $('yt').textContent='Y='+y+' (MUX OUT)';$('qt').textContent='Q='+Q;$('qbt').textContent='Q̅='+(Q?0:1);$('ct').textContent='CLK='+clk;$('s1t').textContent='S1 = Q1 = '+s1;$('s0t').textContent='S0 = Q0 = '+s0;$('swt').textContent='SWAP_DONE = '+sw;$('swl').textContent='SWAP_DONE = '+sw;
+ $('cq').textContent='Q1Q0 = '+s1+s0+' → B'+(cnt+1);$('ph').textContent=ph;
+ $('selB').innerHTML='<b>Battery '+(cnt+1)+'</b> (CLK = '+clk+')';$('mx').textContent='I'+cnt+' = V'+(cnt+1);
+ $('vv').innerHTML=v.map(x=>yn(x,'1','0')).join(' ');$('yy').textContent=y;$('qq').textContent=Q;$('qb').textContent=Q?0:1;$('ss').textContent=sw;$('cc').textContent=cc;
+ const e=[0,1,2,3].filter(act);$('enb').innerHTML=e.length?'<span class="ok">B'+(e[0]+1)+' (EN'+(e[0]+1)+' = LOW)</span>':'<span class="bad">none</span>';
+ let m='<p>'+note+'</p>';
+ if(seen&&!Q&&!v[cnt])m+='<div class="note"><b>HOLDING on B'+(cnt+1)+':</b> VALID = 0, so CNT_CLK = 0 and SWAP_DONE has no effect. This circuit waits; it does not skip. Set A'+(cnt+1)+' = H'+(cnt+1)+' = 1 (then CLK↑) or RESET.</div>';
+ if(stale&&clk)m+='<div class="note"><b>Stale-Q hazard:</b> SWAP_DONE was released while CLK was high: old Q = 1 still enables EN'+(cnt+1)+' until CLK falls. Release SWAP_DONE while CLK is low.</div>';
+ if(Q&&!y&&clk&&seen)m+='<div class="note">A/H changed after the latch: Y follows immediately, Q only at the next CLK↑.</div>';
+ $('msg').innerHTML=m;renderAll()}
+
+/* static tables */
+$('comp').innerHTML=T(['Component','Type','Function'],[['7408 #1','Combinational','Generates V1–V4'],['7408 #2','Combinational','CNT_CLK = VALID · SWAP_DONE (counter advance)'],['74LS153','Combinational','4:1 battery selection'],['74LS74','Sequential','Stores selected validity'],['74LS90','Sequential','MOD-4 round-robin counter'],['1 Hz Clock','Clock','Provides timing'],['74LS155','Combinational','Generates battery enable outputs'],['74LS139','Combinational','Selected battery indication']]);
+$('chk').innerHTML=T(['Connection','Status'],[['Ai,Hi → 7408 #1 → Vi → 153 I0..I3 (V1→I0 … V4→I3)','Drawn'],['153 Y → 74LS74 D','Drawn'],['74LS90 Q0 → S0, Q1 → S1 of 153, 155, 139','Drawn (S0/S1 not swapped)'],['Clock → 74LS74 CLK and 74LS155 1C (not to the counter)','Drawn'],['74LS74 Q (VALID) → 7408 #2 input and VALID LED','Drawn'],['SWAP_DONE button → 7408 #2 other input','Drawn, interactive'],['7408 #2 output CNT_CLK → 74LS90 CKA','Drawn'],['74LS74 Q̅ → 155 1G̅','Drawn'],['153 1G̅ = GND; 74PRE̅ = CLR̅ = +5V; 139 1G̅ = GND; 90 R0 = QC, R9 = GND','Labelled'],['VCC/GND on every IC; unused 7408 #2 gates tied to GND','Shown / noted'],['No control box','Confirmed']]);
+$('t1').innerHTML=T(['A','H','V=A·H'],[[0,0,0],[0,1,0],[1,0,0],[1,1,1]]);
+$('t2').innerHTML=T(['S1','S0','Selected'],[[0,0,'V1'],[0,1,'V2'],[1,0,'V3'],[1,1,'V4']]);
+$('t3').innerHTML=T(['Q1','Q0','Battery'],[[0,0,'B1'],[0,1,'B2'],[1,0,'B3'],[1,1,'B4']]);
+$('t4').innerHTML=T(['D','Q(next)'],[[0,0],[1,1]]);
+$('t5').innerHTML=T(['CLK','Q','S1','S0','Active output'],[[1,1,0,0,'EN1 = LOW'],[1,1,0,1,'EN2 = LOW'],[1,1,1,0,'EN3 = LOW'],[1,1,1,1,'EN4 = LOW'],[0,'X','X','X','all HIGH'],['X',0,'X','X','all HIGH']])+'<p class="sm" style="font-size:13px">Q = 1 → 1G̅ = Q̅ = 0 (enabled); 1C = CLK. Outputs are active LOW.</p>';
+$('t6').innerHTML=T(['S1','S0','Selected','Output (LOW)'],[[0,0,'B1','1Y0'],[0,1,'B2','1Y1'],[1,0,'B3','1Y2'],[1,1,'B4','1Y3']]);
+
+$('t7').innerHTML=T(['Q (VALID)','SWAP_DONE','CNT_CLK = Q·SWAP_DONE'],[[0,0,0],[0,1,0],[1,0,0],[1,1,1]])+'<p>CNT_CLK falls (counter advances) only after being 1, i.e. only when VALID = 1 and SWAP_DONE is then released.</p>';
+(function(){const r=[];for(let c=0;c<4;c++)[[0,'X'],[1,0],[1,1]].forEach(([q,w])=>r.push(['B'+(c+1),(c>>1)+''+(c&1),'B'+(c+1),q,w,(q&&w==1)?'1 → falls':0,(q&&w==1)?'B'+((c+1)%4+1):'B'+(c+1)]));
+$('stt').innerHTML=T(['Current state','S1 S0','Priority battery','Valid selected (Q)','SWAP_DONE','CNT_CLK','Next state'],r)})();
+/* block diagram */
+(function(){let q='<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#0b2a5b"/></marker></defs>';
+const bx=c=>c*142+4,B=(c,r,l)=>{q+=`<rect x="${bx(c)}" y="${r}" width="128" height="64" rx="10" fill="#f6f9ff" stroke="#0b2a5b" stroke-width="2"/>`;l.forEach((t,i)=>q+=`<text x="${bx(c)+64}" y="${r+22+i*15}" text-anchor="middle" font-size="${i?10.5:12}" font-weight="${i?400:700}" fill="#0b2a5b">${t}</text>`)};
+const L=(p,c)=>q+=`<path d="${p}" fill="none" stroke="${c}" stroke-width="2.4" marker-end="url(#ar)"/>`,P=(p,c)=>q+=`<path d="${p}" fill="none" stroke="${c}" stroke-width="2.4"/>`,X=(x,y,t,c)=>q+=`<text x="${x}" y="${y}" font-size="11" fill="${c}">${t}</text>`;
+[['Battery inputs','A1–A4, H1–H4'],['Health &amp; availability','7408 #1: Vn = An·Hn'],['Valid signals','V1–V4'],['4:1 MUX','74LS153'],['D flip-flop','74LS74 → VALID'],['Enable generation','74LS155 (ACTIVE LOW)'],['Selected battery','EN1–EN4 (LOW = on)']].forEach((l,c)=>B(c,40,l));
+for(let c=0;c<6;c++)L(`M${bx(c)+128} 72H${bx(c+1)}`,'#0b2a5b');
+B(0,200,['SWAP_DONE','push-button']);B(1,200,['7408 #2 (AND)','VALID · SWAP_DONE']);B(2,200,['Round-robin counter','74LS90 MOD-4']);B(5,200,['1 Hz CLOCK','CLK']);B(6,200,['Selected indicator','74LS139']);
+L('M132 232H146','#546e7a');L('M274 232H288','#37474f');X(262,192,'CNT_CLK','#37474f');
+P('M352 200V160H586A6 6 0 0 1 598 160H744A6 6 0 0 1 756 160H778','#d81b60');L('M494 160V104','#d81b60');L('M778 160V104','#d81b60');L('M778 160H920V200','#d81b60');
+q+='<circle cx="494" cy="160" r="4.5" fill="#d81b60"/><circle cx="778" cy="160" r="4.5" fill="#d81b60"/>';
+L('M592 104V300H210V264','#7b1fa2');L('M750 200V130H650V104','#555');
+X(360,152,'S1,S0 (priority battery)','#d81b60');X(600,294,'VALID (Q) → 7408 #2','#7b1fa2');X(716,282,'CLK latches Q (↑) and gates 155 (1C)','#555');
+$('cd').innerHTML=q})();
+/* state diagram */
+(function(){const p=[[150,90],[450,90],[450,240],[150,240]],n=['S0 / 00 → B1','S1 / 01 → B2','S2 / 10 → B3','S3 / 11 → B4'];let q='<defs><marker id="a2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#0b2a5b"/></marker></defs>';
+const L=d=>q+=`<path d="${d}" fill="none" stroke="#0b2a5b" stroke-width="2.4" marker-end="url(#a2)"/>`,T2=(x,y,t,a='middle')=>q+=`<text x="${x}" y="${y}" text-anchor="${a}" font-size="12" fill="#0b2a5b">${t}</text>`;
+L('M200 90H400');L('M450 140V190');L('M400 240H200');L('M150 190V140');L('M128 46C100 -24 200 -24 172 46');L('M428 46C400 -24 500 -24 472 46');L('M472 284C500 354 400 354 428 284');L('M172 284C200 354 100 354 128 284');
+T2(300,80,'VALID·SWAP_DONE');T2(462,170,'VALID·SWAP_DONE','start');T2(300,262,'VALID·SWAP_DONE');T2(138,170,'VALID·SWAP_DONE','end');[[150,-8],[450,-8],[450,372],[150,372]].forEach(c=>T2(c[0],c[1],'NOT(VALID·SWAP_DONE): hold'));
+p.forEach((c,i)=>{q+=`<circle id="st${i}" cx="${c[0]}" cy="${c[1]}" r="50" fill="#f6f9ff" stroke="#0b2a5b" stroke-width="2.5"/><text x="${c[0]}" y="${c[1]+4}" text-anchor="middle" font-weight="700" font-size="12" fill="#0b2a5b">${n[i]}</text>`});
+$('sd').innerHTML=q})();
+
+/* dynamic: K-map 2, examples, timing */
+function renderAll(){const v=V();
+ $('km2').innerHTML=`<table class="km" style="width:auto"><tr><th>S1 \\ S0</th><th>0</th><th>1</th></tr><tr><th>0</th><td class="${v[0]?'hit':''}">V1 = ${v[0]}</td><td class="${v[1]?'hit':''}">V2 = ${v[1]}</td></tr><tr><th>1</th><td class="${v[2]?'hit':''}">V3 = ${v[2]}</td><td class="${v[3]?'hit':''}">V4 = ${v[3]}</td></tr></table>`+(v.every(x=>x==v[0])?'<p>All values equal: Y = '+v[0]+' for every S1S0.</p>':'<p>Values differ: no cells merge, Y follows the selected V.</p>');
+ $('ex').innerHTML=T(['Q1Q0','Priority battery','V','MUX OUT = D','Latched Q','EN (CLK high)','After SWAP_DONE'],[0,1,2,3].map(c=>[(c>>1)+''+(c&1),'B'+(c+1),v[c],v[c],v[c],v[c]?'EN'+(c+1)+' = LOW':'all HIGH',(v[c]?'advance to B'+((c+1)%4+1):'HOLD on B'+(c+1)+' (no skip)')]))+(v.some(x=>x)?'':'<p class="bad">V1 = V2 = V3 = V4 = 0 → MUX OUT = 0 → VALID = 0: no valid battery; counter holds.</p>');
+ [0,1,2,3].forEach(i=>$('st'+i).setAttribute('fill',i==cnt?'#bfe8c8':'#f6f9ff'));renderTiming(v)}
+function renderTiming(v){const p=$('auto').checked?1:0;let c=0,S=[];
+ for(let k=0;k<5;k++){const q=v[c];S.push({ck:1,sw:0,c:c,q:q});S.push({ck:1,sw:p,c:c,q:q});const nc=(q&&p)?(c+1)&3:c;S.push({ck:0,sw:0,c:nc,q:q});S.push({ck:0,sw:0,c:nc,q:q});c=nc}
+ const R=[['CLK','#555',s=>s.ck],['SWAP_DONE','#546e7a',s=>s.sw],['CNT_CLK','#37474f',s=>s.q&s.sw],['Q0 = S0','#f57c00',s=>s.c&1],['Q1 = S1','#d81b60',s=>s.c>>1],['Selected',0,0],['MUX Y','#7b1fa2',s=>v[s.c]],['VALID (Q)','#7b1fa2',s=>s.q]];
+ [0,1,2,3].forEach(i=>R.push(['EN'+(i+1)+' (LOW=on)','#000',s=>(s.ck&&s.q&&s.c==i)?0:1,1]));
+ const lx=150,w=32,rh=30;let q='';
+ for(let i=0;i<=20;i++)q+=`<line x1="${lx+i*w}" y1="30" x2="${lx+i*w}" y2="${40+R.length*rh}" stroke="${i%4?'#e3e8f2':'#9fb0cf'}" stroke-dasharray="${i%4?'2 4':'0'}"/>`;
+ for(let k=0;k<5;k++)q+=`<text x="${lx+k*4*w+2*w}" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#0b2a5b">clock ${k+1}</text>`;
+ R.forEach((r,j)=>{const t=40+j*rh,hi=t+6,lo=t+22;q+=`<text x="8" y="${t+19}" font-size="12" font-weight="700" fill="${r[1]||'#223'}">${r[0]}</text>`;
+  if(!r[1]){S.forEach((s,i)=>q+=`<text x="${lx+i*w+w/2}" y="${t+19}" text-anchor="middle" font-size="11" font-weight="700" fill="${bc[s.c]}">B${s.c+1}</text>`);return}
+  let d='';S.forEach((s,i)=>{const val=r[2](s),y=val?hi:lo,x=lx+i*w;d+=(i?`V${y}`:`M${x} ${y}`)+`H${x+w}`;if(r[3]&&!val)q+=`<rect x="${x}" y="${t+2}" width="${w}" height="${rh-4}" fill="#2e9d4a" opacity=".2"/>`});
+  q+=`<path d="${d}" fill="none" stroke="${r[1]}" stroke-width="2.5"/>`});
+ $('tm').innerHTML=q}
+
+const names=['Circuit Simulator','Problem & Requirements','Block Diagram','Components','Boolean Equations','Truth Tables','K-Map','State Table & Diagram','Timing Diagram','Working','Simulation Examples','Advantages · Limits · Future','T1 Rubric'];
+$('nav').innerHTML=names.map((n,i)=>`<button class="${i?'':'on'}" onclick="showTab(${i})">${n}</button>`).join('');
+function showTab(k){document.querySelectorAll('.tab').forEach((e,i)=>e.classList.toggle('on',i==k));document.querySelectorAll('#nav button').forEach((e,i)=>e.classList.toggle('on',i==k));scrollTo(0,0)}
+sc([1,1,1,1],[1,1,1,1],1);showTab(0);
+</script></body></html>
